@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SyncFlo captures Apple Pay spending through your own Shortcuts automation, keeps expenses local by default, and helps you review only what needs attention."
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <title>SyncFlo | Private Apple Pay Expense Capture</title>
+    <script>
+      (() => {
+        const saved = localStorage.getItem("syncflo-theme");
+        const theme =
+          saved === "dark" || saved === "light"
+            ? saved
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
