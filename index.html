@@ -11,7 +11,8 @@
     <title>SyncFlo | Private Apple Pay Expense Capture</title>
     <script>
       (() => {
-        const saved = localStorage.getItem("syncflo-theme");
+        let saved;
+        try { saved = localStorage.getItem("syncflo-theme"); } catch {}
         const theme =
           saved === "dark" || saved === "light"
             ? saved

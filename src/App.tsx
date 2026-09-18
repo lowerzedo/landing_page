@@ -1,19 +1,28 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
   BellRing,
+  BookOpenText,
   Check,
   ChevronDown,
   KeyRound,
   LockKeyhole,
+  Menu,
   Moon,
   Search,
   ShieldCheck,
   Sun,
   WalletCards,
   Waves,
+  X,
 } from "lucide-react";
+import GuidesPage from "./GuidesPage";
+import CaptureDemo from "./CaptureDemo";
+import AppPhone from "./AppPhone";
+import { publishedGuides } from "./guides";
+
+const GuideArticlePage = lazy(() => import("./GuideArticlePage"));
 
 const screens = {
   expensesLight: "/screens/expenses-light.png",
@@ -106,6 +115,39 @@ const faqs = [
   },
 ];
 
+type Faq = (typeof faqs)[number];
+
+function FaqItem({ faq }: { faq: Faq }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const answerId = useId();
+
+  return (
+    <article className="faq-item" data-open={isOpen}>
+      <h3>
+        <button
+          className="faq-question"
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls={answerId}
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          {faq.question}
+          <ChevronDown size={19} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      </h3>
+      <div
+        className="faq-answer"
+        id={answerId}
+        aria-hidden={!isOpen}
+      >
+        <div>
+          <p>{faq.answer}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 type Theme = "light" | "dark";
 
 function getInitialTheme(): Theme {
@@ -122,12 +164,25 @@ function getInitialTheme(): Theme {
 
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [launchRequested, setLaunchRequested] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const route = window.location.pathname.replace(/\/+$/, "");
+  const isGuideArticle = route.startsWith("/guides/");
+  const isGuidesPage = route === "/guides" || isGuideArticle;
+  const currentGuide = isGuideArticle
+    ? publishedGuides.find((guide) => guide.slug === route.slice("/guides/".length))
+    : undefined;
+  const [activeSection, setActiveSection] = useState<string | null>(() =>
+    isGuidesPage ? "guides" : null,
+  );
   const themeLabel =
     theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("syncflo-theme", theme);
+    try { localStorage.setItem("syncflo-theme", theme); } catch { /* Storage can be disabled. */ }
 
     const themeColor = document.querySelector<HTMLMetaElement>(
       'meta[name="theme-color"]',
@@ -138,26 +193,156 @@ function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    const onOutside = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const desktop = window.matchMedia("(min-width: 981px)");
+    const onDesktop = () => { if (desktop.matches) setMenuOpen(false); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onOutside);
+    desktop.addEventListener("change", onDesktop);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onOutside);
+      desktop.removeEventListener("change", onDesktop);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (isGuidesPage) return;
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const animations: Animation[] = [];
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        if (!preference.matches) {
+          animations.push(entry.target.animate(
+            [{ translate: "0 36px" }, { translate: "0 0" }],
+            { duration: 750, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+          ));
+        }
+        observer.unobserve(entry.target);
+      }
+    }, { threshold: 0.15 });
+    document.querySelectorAll(".privacy-visual .app-phone, .screen-figure").forEach((element) => observer.observe(element));
+    const cancelMotion = () => { if (preference.matches) animations.forEach((animation) => animation.cancel()); };
+    preference.addEventListener("change", cancelMotion);
+    return () => {
+      observer.disconnect();
+      animations.forEach((animation) => animation.cancel());
+      preference.removeEventListener("change", cancelMotion);
+    };
+  }, [isGuidesPage]);
+
+  useEffect(() => {
+    document.title = isGuideArticle
+      ? currentGuide ? `${currentGuide.title} | SyncFlo Guides` : "Guide not found | SyncFlo Guides"
+      : isGuidesPage
+      ? "SyncFlo Guides | Practical Money Skills"
+      : "SyncFlo | Private Apple Pay Expense Capture";
+
+    const description = document.querySelector<HTMLMetaElement>(
+      'meta[name="description"]',
+    );
+
+    if (description) {
+      description.content = currentGuide
+        ? currentGuide.description ?? currentGuide.summary
+        : isGuidesPage
+        ? "Practical SyncFlo guides to saving, budgeting, and understanding everyday spending."
+        : "SyncFlo turns Apple Pay Wallet transaction automations into a private local-first expense ledger for iPhone and iPad.";
+    }
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.append(canonical);
+    }
+    canonical.href = `https://syncflo-expenses.skmro.chatgpt.site${isGuidesPage ? route : "/"}`;
+  }, [isGuidesPage, isGuideArticle, currentGuide, route]);
+
+  useEffect(() => {
+    if (isGuidesPage) {
+      setActiveSection("guides");
+      return;
+    }
+
+    const sectionIds = ["capture", "privacy", "pro", "faq"];
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null);
+
+    const scrollToCurrentHash = () => {
+      let hash: string;
+      try { hash = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
+
+      if (![...sectionIds, "launch"].includes(hash)) {
+        return;
+      }
+
+      document.getElementById(hash)?.scrollIntoView({ block: "start" });
+      setActiveSection(hash);
+    };
+
+    const updateActiveSection = () => {
+      const firstSection = sections[0];
+
+      if (!firstSection || window.scrollY < firstSection.offsetTop - 240) {
+        setActiveSection(null);
+        return;
+      }
+
+      const marker = window.scrollY + Math.min(window.innerHeight * 0.35, 300);
+      let currentSection = sections[0].id;
+
+      for (const section of sections) {
+        if (section.offsetTop <= marker) {
+          currentSection = section.id;
+        }
+      }
+
+      setActiveSection(currentSection);
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToCurrentHash();
+      updateActiveSection();
+    });
+
+    window.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
+    window.addEventListener("hashchange", scrollToCurrentHash);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+      window.removeEventListener("hashchange", scrollToCurrentHash);
+    };
+  }, [isGuidesPage]);
+
   return (
     <>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
 
-      <header className="site-header">
-        <a className="brand" href="#top" aria-label="SyncFlo home">
+      <header className="site-header" ref={headerRef}>
+        <a className="brand" href="/" aria-label="SyncFlo home">
           <span className="brand-mark" aria-hidden="true">
             <Waves size={19} strokeWidth={2.6} />
           </span>
           <span>SyncFlo</span>
         </a>
 
-        <nav className="site-nav" aria-label="Primary navigation">
-          <a href="#capture">How it works</a>
-          <a href="#privacy">Privacy</a>
-          <a href="#pro">Pro</a>
-          <a href="#faq">FAQ</a>
-        </nav>
 
         <div className="header-actions">
           <button
@@ -169,87 +354,127 @@ function App() {
               setTheme((current) => (current === "dark" ? "light" : "dark"))
             }
           >
-            {theme === "dark" ? (
-              <Sun size={18} strokeWidth={2.2} aria-hidden="true" />
-            ) : (
-              <Moon size={18} strokeWidth={2.2} aria-hidden="true" />
-            )}
+            <span className="theme-icon" key={theme} aria-hidden="true">
+              {theme === "dark" ? (
+                <Sun size={18} strokeWidth={2.2} />
+              ) : (
+                <Moon size={18} strokeWidth={2.2} />
+              )}
+            </span>
           </button>
-          <a className="nav-cta" href="#launch">
+          <a className="nav-cta" href="/#launch">
             Join launch list
           </a>
+          <button className="menu-toggle" type="button" ref={menuButtonRef} aria-expanded={menuOpen} aria-controls="primary-navigation" aria-label={menuOpen ? "Close navigation" : "Open navigation"} onClick={() => setMenuOpen((open) => !open)}>
+            {menuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
+          </button>
         </div>
+        <nav className="site-nav" id="primary-navigation" data-open={menuOpen} aria-label="Primary navigation" onClick={() => setMenuOpen(false)}>
+          <a
+            href="/#capture"
+            aria-current={activeSection === "capture" ? "location" : undefined}
+          >
+            How it works
+          </a>
+          <a
+            href="/#privacy"
+            aria-current={activeSection === "privacy" ? "location" : undefined}
+          >
+            Privacy
+          </a>
+          <a
+            href="/#pro"
+            aria-current={activeSection === "pro" ? "location" : undefined}
+          >
+            Pro
+          </a>
+          <a
+            href="/guides"
+            aria-current={activeSection === "guides" ? "page" : undefined}
+          >
+            Guides
+          </a>
+          <a
+            href="/#faq"
+            aria-current={activeSection === "faq" ? "location" : undefined}
+          >
+            FAQ
+          </a>
+        </nav>
       </header>
 
-      <main id="main">
+      <main id="main" tabIndex={-1} className={isGuidesPage ? "guides-main" : undefined}>
+        {isGuideArticle ? (
+          <Suspense fallback={<div className="guide-loading" role="status">Opening guide…</div>}>
+            <GuideArticlePage guide={currentGuide} />
+          </Suspense>
+        ) : isGuidesPage ? (
+          <GuidesPage />
+        ) : (
+          <>
         <section className="hero" id="top" aria-labelledby="hero-title">
           <div className="hero-copy">
-            <p className="hero-kicker">Private expense capture for iPhone and iPad</p>
+            <p className="hero-kicker"><span aria-hidden="true" /> Your everyday spending, privately</p>
             <h1 id="hero-title">
-              Apple Pay spending, logged by your Shortcut.
+              <span>Tap to pay.</span>
+              <span className="hero-emphasis">See it clearly.</span>
             </h1>
             <p className="hero-intro">
-              SyncFlo turns Wallet transaction automations into a clean,
-              local-first ledger. No bank login, no notification reading, and
-              no hosted AI requirement.
+              Turn your Apple Pay purchases into a clear expense log.
+              One Wallet automation in Shortcuts. A little less life admin.
+              All on your terms.
             </p>
             <div className="hero-actions">
               <a className="button button-dark" href="#launch">
-                Get launch notice
+                Join the launch list
                 <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
               </a>
               <a className="button button-light" href="#capture">
-                See how capture works
+                See how it works
+                <ChevronDown size={17} aria-hidden="true" />
               </a>
             </div>
+            <p className="hero-availability">Coming to iPhone &amp; iPad <span aria-hidden="true">·</span> Expense capture stays free</p>
           </div>
 
           <div className="hero-product" aria-label="SyncFlo product preview">
             <div className="orbit orbit-one" aria-hidden="true" />
-            <div className="orbit orbit-two" aria-hidden="true" />
-            <img
+            <AppPhone
               className="hero-phone hero-phone-back"
               src={screens.analyticsDark}
-              alt="SyncFlo dark analytics screen with a monthly spending chart and category breakdown."
-              width="938"
-              height="1644"
-              decoding="async"
-              fetchPriority="high"
+              alt="SyncFlo Analytics in dark mode, showing weekly spending trends and a category breakdown with sample data."
+              priority
             />
-            <img
+            <AppPhone
               className="hero-phone hero-phone-front"
               src={screens.expensesLight}
-              alt="SyncFlo light expenses screen with a weekly chart and recent Apple Pay expenses."
-              width="1058"
-              height="1704"
-              decoding="async"
-              fetchPriority="high"
+              alt="SyncFlo Expenses in light mode, showing a weekly chart and recent Apple Pay expenses with sample data."
+              priority
             />
             <div className="capture-toast">
               <span className="toast-icon" aria-hidden="true">
                 <Check size={17} strokeWidth={3} />
               </span>
               <span>
-                <small>Shortcut added</small>
-                <strong>Coffee · USD 2.00</strong>
+                <small>Saved by your Shortcut</small>
+                <strong>Starbucks · USD 4.80</strong>
               </span>
             </div>
           </div>
 
           <ul className="hero-proof" aria-label="SyncFlo privacy highlights">
-            <li>No bank connection</li>
-            <li>On-device by default</li>
-            <li>Your Shortcut, your fields</li>
+            <li><ShieldCheck size={17} aria-hidden="true" /> No bank connection</li>
+            <li><LockKeyhole size={17} aria-hidden="true" /> On-device by default</li>
+            <li><WalletCards size={17} aria-hidden="true" /> Your Shortcut, your fields</li>
           </ul>
         </section>
 
         <section className="capture-section" id="capture" aria-labelledby="capture-title">
           <div className="section-heading">
-            <p className="section-label">A three-step handoff</p>
-            <h2 id="capture-title">From payment to a useful expense row.</h2>
+            <h2 id="capture-title">A small setup.<br />A lighter routine.</h2>
             <p>
-              The automation belongs to you. SyncFlo receives structured
-              fields, checks the row, and keeps your attention on exceptions.
+              Connect your own Wallet automation once. SyncFlo turns the fields
+              you choose into an expense you can find, review, and understand.
             </p>
           </div>
 
@@ -267,38 +492,42 @@ function App() {
             ))}
           </ol>
 
-          <div className="capture-receipt" aria-label="Example captured expense">
-            <div>
-              <span className="receipt-status">
-                <Check size={15} strokeWidth={3} aria-hidden="true" />
-                Added to Expenses
-              </span>
-              <strong>Coffee</strong>
-              <small>Food &amp; Drink · Today at 4:34 PM</small>
-            </div>
-            <b>USD 2.00</b>
-          </div>
+          <CaptureDemo />
         </section>
+
+        <aside className="guides-promo" aria-labelledby="guides-promo-title">
+          <span className="guides-promo-icon" aria-hidden="true">
+            <BookOpenText size={22} strokeWidth={2.15} />
+          </span>
+          <div>
+            <p>SyncFlo Guides</p>
+            <h2 id="guides-promo-title">Build steadier money habits.</h2>
+            <span>
+              Practical reading on budgeting, saving, and understanding your
+              everyday spending.
+            </span>
+          </div>
+          <a href="/guides">
+            Browse the guides
+            <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
+          </a>
+        </aside>
 
         <section className="privacy-section" id="privacy" aria-labelledby="privacy-title">
           <div className="privacy-visual">
             <span className="privacy-halo" aria-hidden="true" />
-            <img
+            <AppPhone
               src={screens.settingsDark}
               alt="SyncFlo dark settings screen explaining on-device storage and optional AI categorization."
-              width="914"
-              height="1670"
-              loading="lazy"
-              decoding="async"
             />
           </div>
 
           <div className="privacy-content">
             <ShieldCheck size={32} strokeWidth={2} aria-hidden="true" />
-            <h2 id="privacy-title">You decide what leaves your phone.</h2>
+            <h2 id="privacy-title">Your money.<br />Your phone.<br /><span>Your business.</span></h2>
             <p className="privacy-lede">
-              SyncFlo’s boundary is visible in the app, before any optional
-              service is enabled.
+              Your ledger lives on your device by default. You decide what
+              to export and whether to enable an optional AI provider.
             </p>
 
             <div className="boundary-list">
@@ -320,35 +549,28 @@ function App() {
 
         <section className="pro-section" id="pro" aria-labelledby="pro-title">
           <div className="pro-heading">
-            <p className="section-label">SyncFlo Pro</p>
-            <h2 id="pro-title">Capture stays free. Pro helps you plan.</h2>
+            <p className="pro-badge">SyncFlo <span>Pro</span></p>
+            <h2 id="pro-title">See the pattern.<br />Plan the next step.</h2>
             <p>
               Build the ledger first. When you want a wider view, Pro adds
               budgets, analytics, projections, alerts, and merchant rules.
             </p>
+            <a className="text-link" href="#faq">Explore what’s included <ArrowRight size={17} aria-hidden="true" /></a>
           </div>
 
           <div className="pro-gallery">
             <figure className="screen-figure screen-analytics">
-              <img
+              <AppPhone
                 src={screens.analyticsDark}
-                alt="SyncFlo dark analytics screen showing a monthly trend chart."
-                width="938"
-                height="1644"
-                loading="lazy"
-                decoding="async"
+                alt="SyncFlo Analytics in dark mode, showing a weekly trend chart and spending by category with sample data."
               />
               <figcaption>Weekly trends and category patterns</figcaption>
             </figure>
 
             <figure className="screen-figure screen-budget">
-              <img
+              <AppPhone
                 src={screens.budgetLight}
-                alt="SyncFlo light budget screen showing monthly progress, projections, and category limits."
-                width="1046"
-                height="1688"
-                loading="lazy"
-                decoding="async"
+                alt="SyncFlo Budget in light mode, showing monthly progress, projections, and category limits with sample data."
               />
               <figcaption>Budgets that show what is left</figcaption>
             </figure>
@@ -374,7 +596,7 @@ function App() {
           <div className="find-icon" aria-hidden="true">
             <Search size={27} strokeWidth={2.2} />
           </div>
-          <h2 id="find-title">The transaction you need stays findable.</h2>
+            <h2 id="find-title">Find that one purchase.</h2>
           <p>
             Search by merchant, category, review state, or time range. Export a
             SyncFlo JSON backup when you want your own copy elsewhere.
@@ -390,10 +612,10 @@ function App() {
         <section className="launch-section" id="launch" aria-labelledby="launch-title">
           <div>
             <p className="launch-note">Coming to iPhone and iPad</p>
-            <h2 id="launch-title">Get one email when SyncFlo is ready.</h2>
+            <h2 id="launch-title">A clearer picture is on its way.</h2>
             <p>
-              Launch updates will stay focused on availability, privacy notes,
-              and important early product changes.
+              Get an email when SyncFlo is ready for your iPhone or iPad.
+              Capture stays free. Your ledger stays yours.
             </p>
           </div>
 
@@ -402,6 +624,13 @@ function App() {
             action="mailto:launch@syncflo.app"
             method="post"
             encType="text/plain"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              const email = String(data.get("email") ?? "");
+              window.location.href = `mailto:launch@syncflo.app?subject=${encodeURIComponent("SyncFlo launch list")}&body=${encodeURIComponent(`Please notify me when SyncFlo launches.\n\nEmail: ${email}`)}`;
+              setLaunchRequested(true);
+            }}
           >
             <label htmlFor="launch-email">Email address</label>
             <div>
@@ -411,14 +640,16 @@ function App() {
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
+                aria-describedby="launch-help"
                 required
               />
               <button type="submit">
-                Join launch list
+                Request launch email
                 <ArrowRight size={18} strokeWidth={2.3} aria-hidden="true" />
               </button>
             </div>
-            <small>Used only for SyncFlo launch updates.</small>
+            <small id="launch-help">Opens your email app. Send the message to join the launch list.</small>
+            <p className="launch-feedback" role="status">{launchRequested ? "Send the draft in your email app to join. If no draft opened, email launch@syncflo.app." : ""}</p>
           </form>
         </section>
 
@@ -432,21 +663,15 @@ function App() {
           </div>
 
           <div className="faq-list">
-            {faqs.map((faq) => (
-              <details key={faq.question}>
-                <summary>
-                  {faq.question}
-                  <ChevronDown size={19} strokeWidth={2.2} aria-hidden="true" />
-                </summary>
-                <p>{faq.answer}</p>
-              </details>
-            ))}
+            {faqs.map((faq) => <FaqItem faq={faq} key={faq.question} />)}
           </div>
         </section>
+          </>
+        )}
       </main>
 
       <footer className="site-footer">
-        <a className="brand" href="#top" aria-label="Back to SyncFlo home">
+        <a className="brand" href="/" aria-label="Back to SyncFlo home">
           <span className="brand-mark" aria-hidden="true">
             <Waves size={19} strokeWidth={2.6} />
           </span>
