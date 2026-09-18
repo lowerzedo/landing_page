@@ -22,6 +22,8 @@ import CaptureDemo from "./CaptureDemo";
 import AppPhone from "./AppPhone";
 import { publishedGuides } from "./guides";
 
+const PrivacyPolicyPage = lazy(() => import("./PrivacyPolicyPage"));
+
 const GuideArticlePage = lazy(() => import("./GuideArticlePage"));
 
 const screens = {
@@ -60,7 +62,7 @@ const boundaries = [
   {
     icon: LockKeyhole,
     title: "Local by default",
-    copy: "Your expense ledger stays on your device unless you export it.",
+    copy: "Your ledger is stored on-device. Exports and optional AI share only what you choose.",
   },
   {
     icon: KeyRound,
@@ -169,6 +171,7 @@ function App() {
   const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const route = window.location.pathname.replace(/\/+$/, "");
+  const isPrivacyPolicy = route === "/privacy";
   const isGuideArticle = route.startsWith("/guides/");
   const isGuidesPage = route === "/guides" || isGuideArticle;
   const currentGuide = isGuideArticle
@@ -243,7 +246,9 @@ function App() {
   }, [isGuidesPage]);
 
   useEffect(() => {
-    document.title = isGuideArticle
+    document.title = isPrivacyPolicy
+      ? "Privacy Policy | SyncFlo"
+      : isGuideArticle
       ? currentGuide ? `${currentGuide.title} | SyncFlo Guides` : "Guide not found | SyncFlo Guides"
       : isGuidesPage
       ? "SyncFlo Guides | Practical Money Skills"
@@ -254,7 +259,9 @@ function App() {
     );
 
     if (description) {
-      description.content = currentGuide
+      description.content = isPrivacyPolicy
+        ? "How SyncFlo handles on-device expense data, optional AI, subscriptions, backups, and your privacy choices."
+        : currentGuide
         ? currentGuide.description ?? currentGuide.summary
         : isGuidesPage
         ? "Practical SyncFlo guides to saving, budgeting, and understanding everyday spending."
@@ -266,8 +273,8 @@ function App() {
       canonical.rel = "canonical";
       document.head.append(canonical);
     }
-    canonical.href = `https://syncflo-expenses.skmro.chatgpt.site${isGuidesPage ? route : "/"}`;
-  }, [isGuidesPage, isGuideArticle, currentGuide, route]);
+    canonical.href = `https://syncflo.pages.dev${isGuidesPage || isPrivacyPolicy ? route : "/"}`;
+  }, [isGuidesPage, isGuideArticle, isPrivacyPolicy, currentGuide, route]);
 
   useEffect(() => {
     if (isGuidesPage) {
@@ -403,8 +410,12 @@ function App() {
         </nav>
       </header>
 
-      <main id="main" tabIndex={-1} className={isGuidesPage ? "guides-main" : undefined}>
-        {isGuideArticle ? (
+      <main id="main" tabIndex={-1} className={isGuidesPage || isPrivacyPolicy ? "guides-main" : undefined}>
+        {isPrivacyPolicy ? (
+          <Suspense fallback={<div className="guide-loading" role="status">Opening privacy policy…</div>}>
+            <PrivacyPolicyPage />
+          </Suspense>
+        ) : isGuideArticle ? (
           <Suspense fallback={<div className="guide-loading" role="status">Opening guide…</div>}>
             <GuideArticlePage guide={currentGuide} />
           </Suspense>
@@ -530,6 +541,8 @@ function App() {
               to export and whether to enable an optional AI provider.
             </p>
 
+            <a className="policy-summary-link" href="/privacy">Read the full privacy policy <ArrowRight size={17} aria-hidden="true" /></a>
+
             <div className="boundary-list">
               {boundaries.map((item) => {
                 const Icon = item.icon;
@@ -621,14 +634,14 @@ function App() {
 
           <form
             className="launch-form"
-            action="mailto:launch@syncflo.app"
+            action="mailto:dev.amir.mambetaliev@gmail.com"
             method="post"
             encType="text/plain"
             onSubmit={(event) => {
               event.preventDefault();
               const data = new FormData(event.currentTarget);
               const email = String(data.get("email") ?? "");
-              window.location.href = `mailto:launch@syncflo.app?subject=${encodeURIComponent("SyncFlo launch list")}&body=${encodeURIComponent(`Please notify me when SyncFlo launches.\n\nEmail: ${email}`)}`;
+              window.location.href = `mailto:dev.amir.mambetaliev@gmail.com?subject=${encodeURIComponent("SyncFlo launch list")}&body=${encodeURIComponent(`Please notify me when SyncFlo launches.\n\nEmail: ${email}`)}`;
               setLaunchRequested(true);
             }}
           >
@@ -649,7 +662,7 @@ function App() {
               </button>
             </div>
             <small id="launch-help">Opens your email app. Send the message to join the launch list.</small>
-            <p className="launch-feedback" role="status">{launchRequested ? "Send the draft in your email app to join. If no draft opened, email launch@syncflo.app." : ""}</p>
+            <p className="launch-feedback" role="status">{launchRequested ? "Send the draft in your email app to join. If no draft opened, email dev.amir.mambetaliev@gmail.com." : ""}</p>
           </form>
         </section>
 
@@ -677,8 +690,8 @@ function App() {
           </span>
           <span>SyncFlo</span>
         </a>
-        <p>Private Apple Pay expense capture through your own Shortcut.</p>
-        <a href="mailto:hello@syncflo.app">hello@syncflo.app</a>
+        <p>Private Apple Pay expense capture through your own Shortcut.<br /><a className="footer-policy-link" href="/privacy">Privacy policy</a></p>
+        <a href="mailto:dev.amir.mambetaliev@gmail.com">dev.amir.mambetaliev@gmail.com</a>
       </footer>
     </>
   );

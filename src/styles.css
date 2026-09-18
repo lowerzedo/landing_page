@@ -2380,3 +2380,11 @@ summary:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; }
   .article-meta { margin-top: 1rem; }
   .article-header h1 { font-size: clamp(2.25rem, 10vw, 3.25rem); }
 }
+
+/* Privacy policy uses the established article reading layout. */
+.privacy-policy { padding-bottom: clamp(4rem, 8vw, 7rem); }
+.policy-date { margin-top: 1.4rem; color: var(--muted); font-size: 0.95rem; }
+.privacy-policy .article-body a { color: var(--blue-deep); text-decoration: underline; text-underline-offset: 0.2em; overflow-wrap: anywhere; }
+.policy-summary-link { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; margin-top: 1rem; color: var(--privacy-ink); text-decoration: underline; text-underline-offset: 0.25em; }
+.footer-policy-link { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--ink); text-decoration: underline; text-underline-offset: 0.25em; }
+.site-footer > a:last-child { overflow-wrap: anywhere; min-width: 0; }
